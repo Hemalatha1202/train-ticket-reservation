@@ -46,4 +46,4 @@ jobs:
           -Dsonar.projectKey=Hemalatha1202_train-ticket-reservation
           -Dsonar.organization=Hemalatha1202
           -Dsonar.host.url=https://sonarcloud.io
-          -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+          -Dsonar.token=${{ secrets.SONAR_TOKEN }}     

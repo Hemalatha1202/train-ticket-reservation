@@ -1,18 +1,22 @@
-
-name: ci pipe line
+name: CI/CD Pipeline - Tomcat Deployment
 
 on:
   push:
     branches:
       - main
+
 jobs:
-  build:
+  build-and-deploy:
+
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Checkout source code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 2. Setup Java
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -20,22 +24,30 @@ jobs:
           java-version: '17'
           cache: maven
 
-      - name: Build with Maven
-        run: mvn clean install
-      - name: Run compile
-        run: mvn compile
-      
-      - name: Run Unit Tests
-        run: mvn test
+      # 3. Build WAR file
+      - name: Build Application
+        run: mvn clean package -DskipTests
 
-      - name: Run package
-        run: mvn package
-
-      - name: SonarQube Analysis
-        uses: SonarSource/sonarqube-scan-action@v6
+      # 4. Deploy WAR to Tomcat
+      - name: Deploy to Tomcat
+        uses: appleboy/scp-action@v1
         with:
-           args: >
-            -Dsonar.projectKey=train-ticket-reservation
-        env:
-           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          host: ${{ secrets.TOMCAT_HOST }}
+          username: ${{ secrets.TOMCAT_USER }}
+          key: ${{ secrets.TOMCAT_SSH_KEY }}
+          source: "target/*.war"
+          target: "/root/tomcat/apache-tomcat-10.1.59/webapps/"
+          strip_components: 1
+
+      # 5. Restart Tomcat
+      - name: Restart Tomcat
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.TOMCAT_HOST }}
+          username: ${{ secrets.TOMCAT_USER }}
+          key: ${{ secrets.TOMCAT_SSH_KEY }}
+          script: |
+            cd /root/tomcat/apache-tomcat-10.1.59
+            ./bin/shutdown.sh || true
+            sleep 5
+            ./bin/startup.sh

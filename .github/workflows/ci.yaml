@@ -33,6 +33,9 @@ jobs:
 
       - name: SonarQube Analysis
         uses: SonarSource/sonarqube-scan-action@v6
+        with:
+           args: >
+            -Dsonar.projectKey=train-ticket-reservation
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

@@ -28,26 +28,28 @@ jobs:
       - name: Build Application
         run: mvn clean package -DskipTests
 
-      # 4. Deploy WAR to Tomcat
-      - name: Deploy to Tomcat
+# 4. Copy WAR to Ubuntu user's home directory
+      - name: Copy WAR to Tomcat Server
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.TOMCAT_HOST }}
           username: ${{ secrets.TOMCAT_USER }}
           key: ${{ secrets.TOMCAT_SSH_KEY }}
           source: "target/*.war"
-          target: "/root/tomcat/apache-tomcat-10.1.59/webapps/"
+          target: "/home/ubuntu/"
           strip_components: 1
 
-      # 5. Restart Tomcat
-      - name: Restart Tomcat
+# 5. Deploy WAR and Restart Tomcat
+      - name: Deploy WAR to Tomcat
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.TOMCAT_HOST }}
-          username: ${{ secrets.TOMCAT_USER }}
-          key: ${{ secrets.TOMCAT_SSH_KEY }}
-          script: |
-            cd /root/tomcat/apache-tomcat-10.1.59
-            ./bin/shutdown.sh || true
-            sleep 5
-            ./bin/startup.sh
+            host: ${{ secrets.TOMCAT_HOST }}
+            username: ${{ secrets.TOMCAT_USER }}
+            key: ${{ secrets.TOMCAT_SSH_KEY }}
+            script: |
+               sudo mv /home/ubuntu/*.war /root/tomcat/apache-tomcat-10.1.59/webapps/
+                cd /root/tomcat/apache-tomcat-10.1.59
+
+                 ./bin/shutdown.sh || true
+                  sleep 5
+                  ./bin/startup.sh

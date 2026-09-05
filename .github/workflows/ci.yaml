@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - DEV and TEST Tomcat
+name: CI/CD Pipeline - Tomcat Deployment
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
 
 jobs:
 
-  # =========================
+  # ==========================================================
   # BUILD
-  # =========================
+  # ==========================================================
   build:
     name: Build Application
     runs-on: ubuntu-latest
@@ -32,52 +32,41 @@ jobs:
       - name: Build Application
         run: mvn clean package -DskipTests
 
-      # 4. Rename WAR for DEV
-      - name: Prepare DEV WAR
-        run: cp target/*.war TrainBook-Dev.war
-
-      # 5. Rename WAR for TEST
-      - name: Prepare TEST WAR
-        run: cp target/*.war TrainBook-Test.war
-
-      # 6. Upload WAR files
-      - name: Upload WAR files
+      # 4. Upload WAR as GitHub Artifact
+      - name: Upload WAR
         uses: actions/upload-artifact@v4
         with:
-          name: trainbook-wars
-          path: |
-            TrainBook-Dev.war
-            TrainBook-Test.war
+          name: trainbook-war
+          path: target/*.war
 
 
-  # =========================
-  # DEV DEPLOYMENT
-  # =========================
+  # ==========================================================
+  # DEV
+  # ==========================================================
   deploy-dev:
-    name: Deploy to DEV Tomcat
+    name: Deploy to DEV
     needs: build
     runs-on: ubuntu-latest
 
     steps:
 
-      # Download WAR files
-      - name: Download WAR files
+      - name: Download WAR
         uses: actions/download-artifact@v4
         with:
-          name: trainbook-wars
+          name: trainbook-war
+          path: war
 
-      # Copy DEV WAR to server
-      - name: Copy DEV WAR
+      - name: Copy WAR to DEV Server
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.DEV_HOST }}
           username: ${{ secrets.DEV_USER }}
           key: ${{ secrets.DEV_SSH_KEY }}
-          source: "TrainBook-Dev.war"
+          source: "war/*.war"
           target: "/home/ubuntu/"
+          strip_components: 1
 
-      # Deploy DEV WAR
-      - name: Deploy DEV WAR and Restart Tomcat
+      - name: Deploy to DEV Tomcat
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DEV_HOST }}
@@ -87,47 +76,43 @@ jobs:
 
             TOMCAT=/root/tomcat/apache-tomcat-10.1.59
 
-            # Remove previous DEV deployment
             sudo rm -rf $TOMCAT/webapps/TrainBook-Dev
             sudo rm -f $TOMCAT/webapps/TrainBook-Dev.war
 
-            # Copy new WAR
-            sudo mv /home/ubuntu/TrainBook-Dev.war $TOMCAT/webapps/TrainBook-Dev.war
+            sudo mv /home/ubuntu/*.war $TOMCAT/webapps/TrainBook-Dev.war
 
-            # Restart Tomcat
             sudo $TOMCAT/bin/shutdown.sh || true
             sleep 5
             sudo $TOMCAT/bin/startup.sh
 
 
-  # =========================
-  # TEST DEPLOYMENT
-  # =========================
+  # ==========================================================
+  # TEST
+  # ==========================================================
   deploy-test:
-    name: Deploy to TEST Tomcat
+    name: Deploy to TEST
     needs: deploy-dev
     runs-on: ubuntu-latest
 
     steps:
 
-      # Download WAR files
-      - name: Download WAR files
+      - name: Download WAR
         uses: actions/download-artifact@v4
         with:
-          name: trainbook-wars
+          name: trainbook-war
+          path: war
 
-      # Copy TEST WAR to server
-      - name: Copy TEST WAR
+      - name: Copy WAR to TEST Server
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.TEST_HOST }}
           username: ${{ secrets.TEST_USER }}
           key: ${{ secrets.TEST_SSH_KEY }}
-          source: "TrainBook-Test.war"
+          source: "war/*.war"
           target: "/home/ubuntu/"
+          strip_components: 1
 
-      # Deploy TEST WAR
-      - name: Deploy TEST WAR and Restart Tomcat
+      - name: Deploy to TEST Tomcat
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.TEST_HOST }}
@@ -137,14 +122,103 @@ jobs:
 
             TOMCAT=/root/tomcat/apache-tomcat-10.1.59
 
-            # Remove previous TEST deployment
             sudo rm -rf $TOMCAT/webapps/TrainBook-Test
             sudo rm -f $TOMCAT/webapps/TrainBook-Test.war
 
-            # Copy new WAR
-            sudo mv /home/ubuntu/TrainBook-Test.war $TOMCAT/webapps/TrainBook-Test.war
+            sudo mv /home/ubuntu/*.war $TOMCAT/webapps/TrainBook-Test.war
 
-            # Restart Tomcat
+            sudo $TOMCAT/bin/shutdown.sh || true
+            sleep 5
+            sudo $TOMCAT/bin/startup.sh
+
+
+  # ==========================================================
+  # PRE-PROD
+  # ==========================================================
+  deploy-preprod:
+    name: Deploy to PRE-PROD
+    needs: deploy-test
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download WAR
+        uses: actions/download-artifact@v4
+        with:
+          name: trainbook-war
+          path: war
+
+      - name: Copy WAR to PRE-PROD Server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.PREPROD_HOST }}
+          username: ${{ secrets.PREPROD_USER }}
+          key: ${{ secrets.PREPROD_SSH_KEY }}
+          source: "war/*.war"
+          target: "/home/ubuntu/"
+          strip_components: 1
+
+      - name: Deploy to PRE-PROD Tomcat
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PREPROD_HOST }}
+          username: ${{ secrets.PREPROD_USER }}
+          key: ${{ secrets.PREPROD_SSH_KEY }}
+          script: |
+
+            TOMCAT=/root/tomcat/apache-tomcat-10.1.59
+
+            sudo rm -rf $TOMCAT/webapps/TrainBook-PreProd
+            sudo rm -f $TOMCAT/webapps/TrainBook-PreProd.war
+
+            sudo mv /home/ubuntu/*.war $TOMCAT/webapps/TrainBook-PreProd.war
+
+            sudo $TOMCAT/bin/shutdown.sh || true
+            sleep 5
+            sudo $TOMCAT/bin/startup.sh
+
+
+  # ==========================================================
+  # PROD
+  # ==========================================================
+  deploy-prod:
+    name: Deploy to PROD
+    needs: deploy-preprod
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Download WAR
+        uses: actions/download-artifact@v4
+        with:
+          name: trainbook-war
+          path: war
+
+      - name: Copy WAR to PROD Server
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: "war/*.war"
+          target: "/home/ubuntu/"
+          strip_components: 1
+
+      - name: Deploy to PROD Tomcat
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+
+            TOMCAT=/root/tomcat/apache-tomcat-10.1.59
+
+            sudo rm -rf $TOMCAT/webapps/TrainBook-Prod
+            sudo rm -f $TOMCAT/webapps/TrainBook-Prod.war
+
+            sudo mv /home/ubuntu/*.war $TOMCAT/webapps/TrainBook-Prod.war
+
             sudo $TOMCAT/bin/shutdown.sh || true
             sleep 5
             sudo $TOMCAT/bin/startup.sh

@@ -39,17 +39,16 @@ jobs:
           target: "/home/ubuntu/"
           strip_components: 1
 
-# 5. Deploy WAR and Restart Tomcat
-      - name: Deploy WAR to Tomcat
+  
+      - name: Deploy WAR and Restart Tomcat
         uses: appleboy/ssh-action@v1
         with:
-            host: ${{ secrets.TOMCAT_HOST }}
-            username: ${{ secrets.TOMCAT_USER }}
-            key: ${{ secrets.TOMCAT_SSH_KEY }}
-            script: |
-               sudo mv /home/ubuntu/*.war /root/tomcat/apache-tomcat-10.1.59/webapps/
-                cd /root/tomcat/apache-tomcat-10.1.59
+              host: ${{ secrets.TOMCAT_HOST }}
+              username: ${{ secrets.TOMCAT_USER }}
+              key: ${{ secrets.TOMCAT_SSH_KEY }}
+              script: |
+                 sudo mv /home/ubuntu/*.war /root/tomcat/apache-tomcat-10.1.59/webapps/
 
-                 ./bin/shutdown.sh || true
+                  sudo /root/tomcat/apache-tomcat-10.1.59/bin/shutdown.sh || true
                   sleep 5
-                  ./bin/startup.sh
+                 sudo /root/tomcat/apache-tomcat-10.1.59/bin/startup.sh

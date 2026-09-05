@@ -1,22 +1,20 @@
-name: CI/CD Pipeline - Tomcat Deployment
+name: Build and Deploy to Tomcat
 
 on:
   push:
     branches:
-      - main
+      - master
 
 jobs:
-  build-and-deploy:
 
-    runs-on: ubuntu-latest 
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
 
     steps:
-
-      # 1. Checkout source code
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Setup Java
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -24,31 +22,92 @@ jobs:
           java-version: '17'
           cache: maven
 
-      # 3. Build WAR file
-      - name: Build Application
+      - name: Build WAR
         run: mvn clean package -DskipTests
 
-# 4. Copy WAR to Ubuntu user's home directory
-      - name: Copy WAR to Tomcat Server
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.TOMCAT_HOST }}
-          username: ${{ secrets.TOMCAT_USER }}
-          key: ${{ secrets.TOMCAT_SSH_KEY }}
-          source: "target/*.war"
-          target: "/home/ubuntu/"
-          strip_components: 1
+      - name: Rename WAR
+        run: cp target/*.war TrainBook.war
 
-  
-      - name: Deploy WAR and Restart Tomcat
-        uses: appleboy/ssh-action@v1
+      - name: Upload WAR
+        uses: actions/upload-artifact@v4
         with:
-              host: ${{ secrets.TOMCAT_HOST }}
-              username: ${{ secrets.TOMCAT_USER }}
-              key: ${{ secrets.TOMCAT_SSH_KEY }}
-              script: |
-                 sudo mv /home/ubuntu/*.war /root/tomcat/apache-tomcat-10.1.59/webapps/
+          name: TrainBook-WAR
+          path: TrainBook.war
 
-                  sudo /root/tomcat/apache-tomcat-10.1.59/bin/shutdown.sh || true
-                  sleep 5
-                 sudo /root/tomcat/apache-tomcat-10.1.59/bin/startup.sh
+
+  deploy-dev:
+    name: Deploy to DEV Tomcat
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download WAR
+        uses: actions/download-artifact@v4
+        with:
+          name: TrainBook-WAR
+
+      - name: Copy WAR to DEV server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEV_HOST }}
+          username: ${{ secrets.DEV_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          source: "TrainBook.war"
+          target: "/tmp"
+
+      - name: Deploy DEV application
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_HOST }}
+          username: ${{ secrets.DEV_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          script: |
+            TOMCAT=/root/tomcat/apache-tomcat-10.1.59
+
+            rm -rf $TOMCAT/webapps/TrainBook-Dev
+            rm -f $TOMCAT/webapps/TrainBook-Dev.war
+
+            mv /tmp/TrainBook.war $TOMCAT/webapps/TrainBook-Dev.war
+
+            $TOMCAT/bin/shutdown.sh || true
+            sleep 5
+            $TOMCAT/bin/startup.sh
+
+
+  deploy-test:
+    name: Deploy to TEST Tomcat
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download WAR
+        uses: actions/download-artifact@v4
+        with:
+          name: TrainBook-WAR
+
+      - name: Copy WAR to TEST server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.TEST_HOST }}
+          username: ${{ secrets.TEST_USER }}
+          key: ${{ secrets.TEST_SSH_KEY }}
+          source: "TrainBook.war"
+          target: "/tmp"
+
+      - name: Deploy TEST application
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.TEST_HOST }}
+          username: ${{ secrets.TEST_USER }}
+          key: ${{ secrets.TEST_SSH_KEY }}
+          script: |
+            TOMCAT=/root/tomcat/apache-tomcat-10.1.59
+
+            rm -rf $TOMCAT/webapps/TrainBook-Test
+            rm -f $TOMCAT/webapps/TrainBook-Test.war
+
+            mv /tmp/TrainBook.war $TOMCAT/webapps/TrainBook-Test.war
+
+            $TOMCAT/bin/shutdown.sh || true
+            sleep 5
+            $TOMCAT/bin/startup.sh

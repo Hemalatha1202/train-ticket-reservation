@@ -3,7 +3,7 @@
   "containerDefinitions": [
     {
       "name": "trainbook",
-      "image": "792682047002.dkr.ecr.ap-southeast-2.amazonaws.com/hema/vc1",
+      "image": "<IMAGE>",
       "cpu": 0,
       "portMappings": [
         {
